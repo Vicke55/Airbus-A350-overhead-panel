@@ -1,0 +1,188 @@
+// ==UserScript==
+// @name         GeoFS A350 Systems
+// @match        *://*.geo-fs.com/*
+// @run-at       document-end
+// @grant        none
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    // ------------------------
+    // System state
+    // ------------------------
+    let state = {
+        battery: false,
+        apuMaster: false,
+        apuAvailable: false,
+        eng1: false,
+        eng2: false,
+        coldDarkEnabled: true
+    };
+
+    // ------------------------
+    // Vänta på GeoFS UI
+    // ------------------------
+    function waitForUI() {
+        let uiContainer = document.querySelector(".geofs-ui-bottom");
+        if (uiContainer) {
+            createUIButton(uiContainer);
+        } else {
+            setTimeout(waitForUI, 1000);
+        }
+    }
+
+    // ------------------------
+    // Skapa huvudknappen
+    // ------------------------
+    function createUIButton(container) {
+        if (document.getElementById("a350SysBtn")) return;
+
+        let btn = document.createElement("button");
+        btn.id = "a350SysBtn";
+        btn.innerText = "A350 SYS";
+        btn.className = "mdl-button mdl-js-button";
+        btn.style.marginLeft = "8px";
+        btn.onclick = togglePanel;
+
+        container.appendChild(btn);
+    }
+
+    // ------------------------
+    // Öppna/stäng panel
+    // ------------------------
+    function togglePanel() {
+        let panel = document.getElementById("a350Panel");
+        if (panel) {
+            panel.remove();
+        } else {
+            createPanel();
+        }
+    }
+
+    // ------------------------
+    // Skapa panel med knappar
+    // ------------------------
+    function createPanel() {
+        let panel = document.createElement("div");
+        panel.id = "a350Panel";
+        panel.style.position = "fixed";
+        panel.style.top = "120px";
+        panel.style.right = "40px";
+        panel.style.background = "#1e1e1e";
+        panel.style.padding = "20px";
+        panel.style.color = "white";
+        panel.style.zIndex = "99999";
+        panel.style.border = "1px solid #444";
+        panel.style.width = "260px";
+
+        panel.innerHTML = `
+            <h3>A350 OVERHEAD</h3>
+            <button id="batteryBtn">BATTERY OFF</button><br><br>
+            <button id="apuMasterBtn">APU MASTER OFF</button><br><br>
+            <button id="apuStartBtn">APU START</button><br><br>
+            <button id="eng1Btn">ENG 1 OFF</button><br><br>
+            <button id="eng2Btn">ENG 2 OFF</button><br><br>
+            <button id="coldDarkToggle">Cold & Dark: ON</button>
+        `;
+
+        document.body.appendChild(panel);
+
+        // ------------------------
+        // BATTERY
+        // ------------------------
+        document.getElementById("batteryBtn").onclick = function() {
+            state.battery = !state.battery;
+            this.innerText = state.battery ? "BATTERY ON" : "BATTERY OFF";
+        };
+
+        // ------------------------
+        // APU MASTER
+        // ------------------------
+        document.getElementById("apuMasterBtn").onclick = function() {
+            if (!state.battery) return alert("Battery required!");
+            state.apuMaster = !state.apuMaster;
+            this.innerText = state.apuMaster ? "APU MASTER ON" : "APU MASTER OFF";
+        };
+
+        // ------------------------
+        // APU START
+        // ------------------------
+        document.getElementById("apuStartBtn").onclick = function() {
+            if (!state.battery || !state.apuMaster) {
+                return alert("Battery + APU Master required!");
+            }
+            this.innerText = "APU STARTING...";
+            setTimeout(() => {
+                state.apuAvailable = true;
+                this.innerText = "APU AVAILABLE";
+            }, 5000);
+        };
+
+        // ------------------------
+        // ENGINE 1
+        // ------------------------
+        document.getElementById("eng1Btn").onclick = function() {
+            if (!state.apuAvailable) return alert("APU not available!");
+            state.eng1 = !state.eng1;
+            if (state.eng1) {
+                geofs.aircraft.instance.startEngine(0);
+                this.innerText = "ENG 1 STARTING...";
+                setTimeout(() => { this.innerText = "ENG 1 ON"; }, 5000);
+            } else {
+                // Stäng bara ENG1, behåll ENG2 om på
+                geofs.aircraft.instance.engine.on = state.eng2;
+                this.innerText = "ENG 1 OFF";
+            }
+        };
+
+        // ------------------------
+        // ENGINE 2
+        // ------------------------
+        document.getElementById("eng2Btn").onclick = function() {
+            if (!state.apuAvailable) return alert("APU not available!");
+            state.eng2 = !state.eng2;
+            if (state.eng2) {
+                geofs.aircraft.instance.startEngine(1);
+                this.innerText = "ENG 2 STARTING...";
+                setTimeout(() => { this.innerText = "ENG 2 ON"; }, 5000);
+            } else {
+                // Stäng bara ENG2, behåll ENG1 om på
+                geofs.aircraft.instance.engine.on = state.eng1;
+                this.innerText = "ENG 2 OFF";
+            }
+        };
+
+        // ------------------------
+        // COLD & DARK TOGGLE
+        // ------------------------
+        document.getElementById("coldDarkToggle").onclick = function() {
+            state.coldDarkEnabled = !state.coldDarkEnabled;
+            this.innerText = state.coldDarkEnabled ?
+                "Cold & Dark: ON" :
+                "Cold & Dark: OFF";
+        };
+    }
+
+    // ------------------------
+    // Cold & Dark på spawn (stör inte startande motorer)
+    // ------------------------
+    function enforceColdAndDark() {
+        if (!state.coldDarkEnabled) return;
+        if (window.geofs && geofs.aircraft && geofs.aircraft.instance) {
+            if (!state.eng1 && !state.eng2) {
+                geofs.aircraft.instance.engine.on = false;
+                geofs.aircraft.instance.setThrottle(0);
+            }
+        }
+    }
+
+    // ------------------------
+    // Loop som håller Cold & Dark aktiv
+    // ------------------------
+    setInterval(enforceColdAndDark, 1000);
+
+    // Starta allt
+    waitForUI();
+
+})();
