@@ -1,1 +1,1 @@
-Thanks for trying this addon, it's still under construction but works just fine. This GeoFS addon adds APU, Battery and cold and dark. You have to turn on the batteries and APU to be able to start the enigines. Please use Tambermonkey for this addon!
+Thanks for trying this addon, it's still under construction but works just fine. This GeoFS addon adds APU, Battery and cold and dark. You have to turn on the batteries and APU to be able to start the enigines. Please use Tampermonkey for this addon!
